@@ -10,8 +10,6 @@
 #include "lwip/init.h"
 #include "lwip/apps/httpd.h"
 
-void httpd_init(void) ;
-
 static absolute_time_t wifi_connected_time;
 static bool led_on = false;
 static bool setup_mode = true;
@@ -166,20 +164,12 @@ int main()
         return -1;
     }
 
-    // Timer example code - This example fires off the callback after 2000ms
-    add_alarm_in_ms(2000, alarm_callback, NULL, false);
-    // For more examples of timer use see https://github.com/raspberrypi/pico-examples/tree/master/timer
-
     // Set up the hostname based on the device MAC address (so it's unique for each device)
-    add_compile_definitions(CYW43_HOST_NAME="WiFan")
-    char hostname[sizeof(CYW43_HOST_NAME) + 4];
-    memcpy(&hostname[0], CYW43_HOST_NAME, sizeof(CYW43_HOST_NAME) - 1);
+    char hostname[sizeof("WiFan") + 4];
+    memcpy(&hostname[0], "WiFan", sizeof("WiFan") - 1);
     get_mac_ascii(CYW43_HAL_MAC_WLAN0, 8, 4, &hostname[sizeof(CYW43_HOST_NAME) - 1]);
     hostname[sizeof(hostname) - 1] = '\0';
     netif_set_hostname(&cyw43_state.netif[CYW43_ITF_STA], hostname);
-
-    // Setup http server
-    cyw43_arch_lwip_begin();
 
     if (setup_mode) 
     {
@@ -189,35 +179,33 @@ int main()
         // - Wi-Fi WPA2 password to connect
         // - Device name (for mDNS and Home Assistant auto discovery)
         const char *ap_name = "WiFan-Setup";
-        const char *password = NULL;
 
-        cyw43_arch_enable_ap_mode(ap_name, password, CYW43_AUTH_WPA2_AES_PSK);
+        cyw43_arch_enable_ap_mode(ap_name, NULL, CYW43_AUTH_OPEN);
 
-        #if LWIP_IPV6
-        #define IP(x) ((x).u_addr.ip4)
-        #else
-        #define IP(x) (x)
-        #endif
+        ip4_addr_t gw, mask;
+        IP4_ADDR(&gw, 192, 168, 50, 1);
+        IP4_ADDR(&mask, 255, 255, 255, 0);
 
-        ip4_addr_t mask;
-        IP(state->gw).addr = PP_HTONL(LWIP_MAKEU32(192, 168, 50, 1));
-        IP(mask).addr = PP_HTONL(CYW43_DEFAULT_IP_MASK);
-
-        #undef IP
+        cyw43_arch_lwip_begin();
+        struct netif *ap_netif = &cyw43_state.netif[CYW43_ITF_AP];
+        netif_set_ipaddr(ap_netif, &gw);
+        netif_set_netmask(ap_netif, &mask);
+        netif_set_up(ap_netif, &gw);
+        httpd_init();
+        http_set_cgi_handlers(cgi_handlers, LWIP_ARRAYSIZE(cgi_handlers));
+        http_set_ssi_handler(ssi_example_ssi_handler, ssi_tags, LWIP_ARRAYSIZE(ssi_tags));
+        cyw43_arch_lwip_end();
 
         // Start the dhcp server
         dhcp_server_t dhcp_server;
-        dhcp_server_init(&dhcp_server, &state->gw, &mask);
+        dhcp_server_init(&dhcp_server, &gw, &mask);
 
         // Start the dns server
         dns_server_t dns_server;
-        dns_server_init(&dns_server, &state->gw);
+        dns_server_init(&dns_server, &gw);
 
-        if (!tcp_server_open(state, ap_name)) {
-            DEBUG_printf("Failed to start DHCP/WiFi server\n");
-            return 1;
-        }
         // Now we have the network set up, we can start the http server and handle requests
+        cyw43_arch_lwip_begin();
         httpd_init();
         http_set_cgi_handlers(cgi_handlers, LWIP_ARRAYSIZE(cgi_handlers));
         http_set_ssi_handler(ssi_example_ssi_handler, ssi_tags, LWIP_ARRAYSIZE(ssi_tags));
@@ -226,7 +214,7 @@ int main()
         while(true) {
         #if PICO_CYW43_ARCH_POLL
                 cyw43_arch_poll();
-                cyw43_arch_wait_for_work_until(led_time);
+                cyw43_arch_wait_for_work_until(make_timeout_time_ms(1000));
         #else
                 sleep_ms(1000);
         #endif

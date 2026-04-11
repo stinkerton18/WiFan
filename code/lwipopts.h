@@ -37,6 +37,9 @@
 #define LWIP_NETIF_STATUS_CALLBACK  1
 #define LWIP_NETIF_LINK_CALLBACK    1
 #define LWIP_NETIF_HOSTNAME         1
+#define LWIP_HTTPD_CGI      1
+#define LWIP_HTTPD_SSI      1
+#define LWIP_HTTPD_SUPPORT_POST 1
 #define LWIP_NETCONN                0
 #define MEM_STATS                   0
 #define SYS_STATS                   0

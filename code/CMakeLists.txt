@@ -35,7 +35,11 @@ pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(WiFan WiFan.c )
+add_executable(WiFan
+    WiFan.c
+    dhcpserver/dhcpserver.c
+    dnsserver/dnsserver.c
+)
 
 pico_set_program_name(WiFan "WiFan")
 pico_set_program_version(WiFan "0.1")
@@ -51,13 +55,17 @@ target_link_libraries(WiFan
 # Add the standard include files to the build
 target_include_directories(WiFan PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}
+        ${CMAKE_CURRENT_LIST_DIR}/dhcpserver
+        ${CMAKE_CURRENT_LIST_DIR}/dnsserver
 )
 
 # Add any user requested libraries
 target_link_libraries(WiFan 
         hardware_timer
         hardware_clocks
+        pico_stdlib
         pico_cyw43_arch_lwip_threadsafe_background
+        pico_lwip_http
         )
 
 pico_add_extra_outputs(WiFan)
