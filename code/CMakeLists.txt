@@ -36,13 +36,13 @@ pico_sdk_init()
 # Add executable. Default name is the project name, version 0.1
 
 add_executable(WiFan
-    WiFan.c
+    WiFan.c 
     dhcpserver/dhcpserver.c
     dnsserver/dnsserver.c
 )
 
 pico_set_program_name(WiFan "WiFan")
-pico_set_program_version(WiFan "0.1")
+pico_set_program_version(WiFan "0.5")
 
 # Modify the below lines to enable/disable output over UART/USB
 pico_enable_stdio_uart(WiFan 0)
@@ -52,12 +52,25 @@ pico_enable_stdio_usb(WiFan 1)
 target_link_libraries(WiFan
         pico_stdlib)
 
+        
 # Add the standard include files to the build
 target_include_directories(WiFan PRIVATE
         ${CMAKE_CURRENT_LIST_DIR}
         ${CMAKE_CURRENT_LIST_DIR}/dhcpserver
         ${CMAKE_CURRENT_LIST_DIR}/dnsserver
 )
+
+pico_add_library(web_content)
+pico_set_lwip_httpd_content(web_content
+        INTERFACE
+        "${CMAKE_CURRENT_SOURCE_DIR}fs/index.shtml"
+        "${CMAKE_CURRENT_SOURCE_DIR}fs/test.shtml"
+        "${CMAKE_CURRENT_SOURCE_DIR}fs/ledpass.shtml"
+        "${CMAKE_CURRENT_SOURCE_DIR}fs/ledfail.shtml"
+        "${CMAKE_CURRENT_SOURCE_DIR}fs/404.html"
+        "${CMAKE_CURRENT_SOURCE_DIR}fs/img/rpi.png.gz"
+        )
+
 
 # Add any user requested libraries
 target_link_libraries(WiFan 

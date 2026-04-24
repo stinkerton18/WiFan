@@ -9,6 +9,7 @@
 #include "lwip/ip4_addr.h"
 #include "lwip/init.h"
 #include "lwip/apps/httpd.h"
+#define HTTPD_FSDATA_FILE "web_content"
 
 static absolute_time_t wifi_connected_time;
 static bool led_on = false;
@@ -17,11 +18,6 @@ static char *ssid = "Your Wi-Fi SSID";
 static char *password = "Your Wi-Fi Password";
 static char *devicename = "WiFan Smart Fan";
 
-
-int64_t alarm_callback(alarm_id_t id, void *user_data) {
-    // Put your timeout handler code in here
-    return 0;
-}
 
 static size_t get_mac_ascii(int idx, size_t chr_off, size_t chr_len, char *dest_in) {
     static const char hexchr[16] = "0123456789ABCDEF";
@@ -38,15 +34,15 @@ static size_t get_mac_ascii(int idx, size_t chr_off, size_t chr_len, char *dest_
 static const char *cgi_handler_test(int iIndex, int iNumParams, char *pcParam[], char *pcValue[]) {
     if (iNumParams > 0) {
         if (strcmp(pcParam[0], "test") == 0) {
-            return "/test.shtml";
+            return "fs/test.shtml";
         }
     }
-    return "/index.shtml";
+    return "fs/index.shtml";
 }
 
 static tCGI cgi_handlers[] = {
-    { "/", cgi_handler_test },
-    { "/index.shtml", cgi_handler_test },
+    { "fs/", cgi_handler_test },
+    { "fs/index.shtml", cgi_handler_test },
 };
 
 // Note that the buffer size is limited by LWIP_HTTPD_MAX_TAG_INSERT_LEN, so use LWIP_HTTPD_SSI_MULTIPART to return larger amounts of data
@@ -89,16 +85,15 @@ static const char *ssi_tags[] = {
     "ledinv",
 };
 
-#if LWIP_HTTPD_SUPPORT_POST
 #define LED_STATE_BUFSIZE 4
 static void *current_connection;
 
 err_t httpd_post_begin(void *connection, const char *uri, const char *http_request,
         u16_t http_request_len, int content_len, char *response_uri,
         u16_t response_uri_len, u8_t *post_auto_wnd) {
-    if (memcmp(uri, "/led.cgi", 8) == 0 && current_connection != connection) {
+    if (memcmp(uri, "fs/led.cgi", 8) == 0 && current_connection != connection) {
         current_connection = connection;
-        snprintf(response_uri, response_uri_len, "/ledfail.shtml");
+        snprintf(response_uri, response_uri_len, "fs/ledfail.shtml");
         *post_auto_wnd = 1;
         return ERR_OK;
     }
@@ -146,13 +141,12 @@ err_t httpd_post_receive_data(void *connection, struct pbuf *p) {
 }
 
 void httpd_post_finished(void *connection, char *response_uri, u16_t response_uri_len) {
-    snprintf(response_uri, response_uri_len, "/ledfail.shtml");
+    snprintf(response_uri, response_uri_len, "fs/ledfail.shtml");
     if (current_connection == connection) {
-        snprintf(response_uri, response_uri_len, "/ledpass.shtml");
+        snprintf(response_uri, response_uri_len, "fs/ledpass.shtml");
     }
     current_connection = NULL;
 }
-#endif
 
 int main()
 {
@@ -186,11 +180,12 @@ int main()
         IP4_ADDR(&gw, 192, 168, 50, 1);
         IP4_ADDR(&mask, 255, 255, 255, 0);
 
+         // Now we have the network set up, we can start the http server and handle requests
         cyw43_arch_lwip_begin();
         struct netif *ap_netif = &cyw43_state.netif[CYW43_ITF_AP];
         netif_set_ipaddr(ap_netif, &gw);
         netif_set_netmask(ap_netif, &mask);
-        netif_set_up(ap_netif, &gw);
+        netif_set_gw(ap_netif, &gw);
         httpd_init();
         http_set_cgi_handlers(cgi_handlers, LWIP_ARRAYSIZE(cgi_handlers));
         http_set_ssi_handler(ssi_example_ssi_handler, ssi_tags, LWIP_ARRAYSIZE(ssi_tags));
@@ -204,13 +199,6 @@ int main()
         dns_server_t dns_server;
         dns_server_init(&dns_server, &gw);
 
-        // Now we have the network set up, we can start the http server and handle requests
-        cyw43_arch_lwip_begin();
-        httpd_init();
-        http_set_cgi_handlers(cgi_handlers, LWIP_ARRAYSIZE(cgi_handlers));
-        http_set_ssi_handler(ssi_example_ssi_handler, ssi_tags, LWIP_ARRAYSIZE(ssi_tags));
-        cyw43_arch_lwip_end();
-
         while(true) {
         #if PICO_CYW43_ARCH_POLL
                 cyw43_arch_poll();
@@ -219,6 +207,7 @@ int main()
                 sleep_ms(1000);
         #endif
         }
+
         // Cleanup after the user has finished the initial setup
         dns_server_deinit(&dns_server);
         dhcp_server_deinit(&dhcp_server);
