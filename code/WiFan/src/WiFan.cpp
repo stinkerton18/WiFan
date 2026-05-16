@@ -1,0 +1,430 @@
+#include <WiFi.h>
+#include <WebServer.h>
+#include <Preferences.h>
+#include "time.h"
+#include <WiFan.h>
+
+// Initialize the Preferences library
+Preferences preferences;
+
+// Assign output variables to GPIO pins
+const int fan_low_output = 25;
+const int fan_medium_output = 26;
+const int fan_high_output = 27;
+
+// Create a web server object
+WebServer server(80);
+
+// Configure the timezone for the device, this is used for logging and can be set by the user in the web interface
+const char* ntpServer = "pool.ntp.org";
+const long gmtOffset_sec = -8 * 3600;
+const int daylightOffset_sec = 3600;
+
+// Taken from suggestion by Gemini, too lazy to do the math myself, and this is easier to read and understand for users who aren't familiar with POSIX timezone strings
+void setTimezone(String zone) {
+  String tz_string = "";
+
+  if (zone == "PST")      tz_string = "PST8PDT,M3.2.0,M11.1.0";
+  else if (zone == "MST") tz_string = "MST7MDT,M3.2.0,M11.1.0";
+  else if (zone == "CST") tz_string = "CST6CDT,M3.2.0,M11.1.0";
+  else if (zone == "EST") tz_string = "EST5EDT,M3.2.0,M11.1.0";
+  else {
+    Serial.println("Unknown short form, defaulting to UTC");
+    tz_string = "UTC0";
+  }
+
+  // Apply the timezone string to the environment variables
+  setenv("TZ", tz_string.c_str(), 1);
+  tzset();
+  Serial.println("Timezone updated to " + zone);
+}
+
+// Function to handle the root URL and show the current states
+void handleRoot() {
+
+  // Get the last state and whether or not we're in setup mode from the keystore
+  preferences.begin("wifan", true);
+  String laststate = preferences.getString("laststate");
+  String setupmode = preferences.getString("setupmode", "false");
+  String devicename = preferences.getString("devicename");
+  String timezone = preferences.getString("timezone");
+
+  // Close the keystore as a best practice to free up resources
+  preferences.end();
+
+  String html = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">";
+
+  if (setupmode == "true") {
+    // If we're in setup mode, show the setup page
+    const char html[] = R"rawliteral(
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WiFan Configuration</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; padding: 0; background-color: #f4f4f9; color: #333; }
+        .container { max-width: 400px; margin: 0 auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        h2 { margin-top: 0; color: #222; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"], input[type="password"] { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        .show-pass-container { margin-top: 5px; display: flex; align-items: center; font-size: 0.9em; }
+        .show-pass-container input { margin-right: 5px; }
+        .radio-group { margin: 15px 0; }
+        .radio-group label { display: inline-block; font-weight: normal; margin-right: 15px; cursor: pointer; }
+        button { width: 100%; padding: 10px; background-color: #007bff; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; }
+        button:hover { background-color: #0056b3; }
+        html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}.buttonon { background-color: #4CAF50; border: none; color: white; padding: 16px 16px; text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer; width: 350px; height: 120px;}.buttonoff { background-color: #555555; border: none; color: white; padding: 16px 16px; text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer; width: 350px; height: 120px;}.centered-element { position: relative; left: 50%; transform: translateX(-50%); }
+      </style>
+    </head>
+    <body>
+  <div class="container">
+    <h1>Initial Configuration</h1>
+    <form action="/config" method="POST">
+        
+        <div class="form-group">
+            <label for="device_name">Device Name</label>
+            <input type="text" id="device_name" name="device_name" placeholder="WiFan" required>
+        </div>
+
+        <div class="form-group">
+            <label for="ssid">Wi-Fi SSID</label>
+            <input type="text" id="ssid" name="ssid" placeholder="Network Name" required>
+        </div>
+
+        <div class="form-group">
+            <label for="password">Wi-Fi Password</label>
+            <input type="password" id="password" name="password" placeholder="Enter Password">
+            <div class="show-pass-container">
+                <input type="checkbox" id="show_pass" onclick="togglePassword()">
+                <label for="show_pass">Show Password</label>
+            </div>
+        </div>
+
+        <div class="radio-group">
+            <label style="display:block; margin-bottom:5px;">Timezone</label>
+            <input type="radio" id="pst" name="timezone" value="PST" checked>
+            <label for="pst">PST</label>
+            
+            <input type="radio" id="mst" name="timezone" value="MST">
+            <label for="mst">MST</label>
+            
+            <input type="radio" id="cst" name="timezone" value="CST">
+            <label for="cst">CST</label>
+            
+            <input type="radio" id="est" name="timezone" value="EST">
+            <label for="est">EST</label>
+        </div>
+
+        <button type="submit">Save Configuration</button>
+    </form>
+  </div>
+
+  <script>
+  function togglePassword() {
+      var x = document.getElementById("password");
+      if (x.type === "password") {
+          x.type = "text";
+      } else {
+          x.type = "password";
+      }
+  }
+  </script>
+
+  </body>
+  </html>)rawliteral";
+  server.send(200, "text/html", html);
+  } else {
+    // If we're not in setup mode, show the control page
+    // Begin setting up the web interface HTML
+        html += "<link rel=\"icon\" href=\"data:,\">";
+    html += "<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}";
+    html += ".buttonon { background-color: #4CAF50; border: none; color: white; padding: 16px 16px; text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer; width: 350px; height: 120px;}";
+    html += ".buttonoff { background-color: #555555; border: none; color: white; padding: 16px 16px; text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer; width: 350px; height: 120px;}";
+    html += ".centered-element { position: relative; left: 50%; transform: translateX(-50%); }</style>";
+    html += "<title>WiFan Whole House SmartControl</title></head>";
+    html += "<body><h1>WiFan Operation</h1>";
+
+    // Display FAN_LOW controls
+    if (laststate == "low") {
+      html += "<p><a href=\"/25/off\"><button class=\"button buttonon\">Low Speed ON</button></a></p>";
+    } else {
+      html += "<p><a href=\"/25/on\"><button class=\"button buttonoff\">Low Speed OFF</button></a></p>";
+    }
+
+    // Display FAN_MEDIUM controls
+    if (laststate == "medium") {
+      html += "<p><a href=\"/26/off\"><button class=\"button buttonon\">Medium Speed ON</button></a></p>";
+    } else {
+      html += "<p><a href=\"/26/on\"><button class=\"button buttonoff\">Medium Speed OFF</button></a></p>";
+    }
+
+    // Display FAN_HIGH controls
+      if (laststate == "high") {
+      html += "<p><a href=\"/27/off\"><button class=\"button buttonon\">High Speed ON</button></a></p>";
+    } else {
+      html += "<p><a href=\"/27/on\"><button class=\"button buttonoff\">High Speed OFF</button></a></p>";
+    }
+
+    // Display the All Off control
+    html += "<p><a href=\"/all/off\"><button class=\"button buttonoff\">Fan OFF</button></a></p>";
+  }
+
+  // Display Network information
+  html += "<style>.custom-padding td {padding-left: 15px;}</style><table class=\"centered-element\" border=\"1\">";
+  html += "<tr><td align=\"left\"><b>Device Name</b></td><td align=\"center\">" + devicename + "</td></tr>";
+  html += "<tr><td align=\"left\"><b>Timezone</b></td><td align=\"center\">" + timezone + "</td></tr>";
+  html += "<tr><td align=\"left\"><b>Wi-Fi Network</b></td><td align=\"center\">" + WiFi.SSID() + "</td></tr>";
+  html += "<tr><td align=\"left\"><b>IP Address</b></td><td align=\"center\">" + String(WiFi.localIP().toString()) + "</td></tr>";
+  html += "</table>";
+  html += "</body></html>";
+  server.send(200, "text/html", html);
+}
+
+// Function to handle turning GPIO 25 on
+void handleGPIO25On() {
+  // Uypdate the last state in the keystore to "low"
+  preferences.begin("wifan", false);
+  preferences.putString("laststate", "low");
+  preferences.end();
+
+  // Set all the GPIO pins to LOW to ensure the safety of the fan motor before turning the desired one ON
+  digitalWrite(fan_low_output, LOW);
+  digitalWrite(fan_medium_output, LOW);
+  digitalWrite(fan_high_output, LOW);
+  delay(200); // Short delay to ensure all the fan controls are set to LOW before turning the desired one ON
+
+  digitalWrite(fan_low_output, HIGH);
+  Serial.println("Fan set to LOW");
+  handleRoot();
+}
+
+// Function to handle turning GPIO 25 off
+void handleGPIO25Off() {
+  // Update the last state in the keystore to "off"
+  preferences.begin("wifan", false);
+  preferences.putString("laststate", "off");
+  preferences.end();
+  
+  digitalWrite(fan_low_output, LOW);
+  digitalWrite(fan_medium_output, LOW);
+  digitalWrite(fan_high_output, LOW);
+  delay(200); // Short delay to ensure all the fan controls are set to LOW before turning the desired one ON
+  
+  handleRoot();
+}
+
+// Function to handle turning GPIO 26 on
+void handleGPIO26On() {
+  // Update the last state in the keystore to "medium"
+  preferences.begin("wifan", false);
+  preferences.putString("laststate", "medium");
+  preferences.end();
+
+  // Set all the GPIO pins to LOW to ensure the safety of the fan motor before turning the desired one ON
+  digitalWrite(fan_low_output, LOW);
+  digitalWrite(fan_medium_output, LOW);
+  digitalWrite(fan_high_output, LOW);
+  delay(200); // Short delay to ensure the output is set to HIGH before handling the root
+  
+  digitalWrite(fan_medium_output, HIGH);
+  Serial.println("Fan set to MEDIUM");
+  handleRoot();
+}
+
+// Function to handle turning GPIO 26 off
+void handleGPIO26Off() {
+  // Update the last state in the keystore to "off"
+  preferences.begin("wifan", false);
+  preferences.putString("laststate", "off");
+  preferences.end();
+
+  digitalWrite(fan_low_output, LOW);
+  digitalWrite(fan_medium_output, LOW);
+  digitalWrite(fan_high_output, LOW);
+  delay(200); // Short delay to ensure all the fan controls are set to LOW before turning the desired one ON
+
+  handleRoot();
+}
+
+// Function to handle turning GPIO 27 on
+void handleGPIO27On() {
+  // Update the last state in the keystore to "high"
+  preferences.begin("wifan", false);
+  preferences.putString("laststate", "high");
+  preferences.end(); 
+  
+  // Set all the GPIO pins to LOW to ensure the safety of the fan motor before turning the desired one ON
+  digitalWrite(fan_low_output, LOW);
+  digitalWrite(fan_medium_output, LOW);
+  digitalWrite(fan_high_output, LOW);
+  delay(200); // Short delay to ensure all the fan controls are set to LOW before turning the desired one ON
+
+  digitalWrite(fan_high_output, HIGH);
+  Serial.println("Fan set to HIGH");
+  handleRoot();
+}
+
+// Function to handle turning GPIO 27 off
+void handleGPIO27Off() {
+  // Update the last state in the keystore to "off"
+  preferences.begin("wifan", false);
+  preferences.putString("laststate", "off");
+  preferences.end();
+  
+  digitalWrite(fan_low_output, LOW);
+  digitalWrite(fan_medium_output, LOW);
+  digitalWrite(fan_high_output, LOW);
+  delay(200); // Short delay to ensure all the fan controls are set to LOW before turning the desired one ON
+
+  handleRoot();
+}
+
+// Function to handle turning all GPIOs off
+void handleALLOff() {
+  // Update the last state in the keystore to "off"
+  preferences.begin("wifan", false);
+  preferences.putString("laststate", "off");
+  preferences.end();
+
+  digitalWrite(fan_low_output, LOW);
+  digitalWrite(fan_medium_output, LOW);
+  digitalWrite(fan_high_output, LOW);
+  delay(200); // Short delay to ensure all the fan controls are set to LOW before handling the root
+  Serial.println("Fan set to OFF");
+
+  handleRoot();
+}
+
+void setup() {
+  Serial.begin(115200);
+  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
+
+  // Initialize the Fan output variables as outputs
+  pinMode(fan_low_output, OUTPUT);
+  pinMode(fan_medium_output, OUTPUT);
+  pinMode(fan_high_output, OUTPUT);
+  // Ensure all outputs are set to LOW first to ensure the safety of the fan motor
+  digitalWrite(fan_low_output, LOW);
+  digitalWrite(fan_medium_output, LOW);
+  digitalWrite(fan_high_output, LOW);
+
+  // DEBUG only, will be removed once AP mode is implemented
+  preferences.begin("wifan", false);
+  preferences.putString("ssid", "Wampa");
+  preferences.putString("password", "t8tqnkt8t");
+  preferences.end();
+  //DEBUG only, will be removed once AP mode is implemented
+  
+  // Get the Wi-Fi credentials and last operating state from the keystore
+  preferences.begin("wifan", true);
+  String ssid = preferences.getString("ssid");
+  String password = preferences.getString("password");
+  
+  // Check to see if the device name has been changed from the default, and if not, set it to the default value of "WiFan"
+  if (preferences.isKey("devicename")) {
+    String devicename = preferences.getString("devicename");
+  } else {
+    // We need to close the keystore before we can open it again to write to it 
+    preferences.end();
+    preferences.begin("wifan", false);  
+    preferences.putString("devicename", "WiFan");
+    String devicename = preferences.getString("devicename");
+  }
+
+  // Check to see if the timezone has been changed from the default, and if not, set it to the default value of "PST"
+  if (preferences.isKey("timezone")) {
+    String timezone = preferences.getString("timezone");
+    setTimezone(timezone);
+  } else {
+    // We need to close the keystore before we can open it again to write to it 
+    preferences.end();
+    preferences.begin("wifan", false);  
+    preferences.putString("timezone", "PST");
+    setTimezone("PST");
+  }
+
+  // Validate that the last state is set in the keystore, and if not, set it to the default value of "off"
+  if (preferences.isKey("laststate")) {
+    String laststate = preferences.getString("laststate");
+  } else {
+    // We need to close the keystore before we can open it again to write to it 
+    preferences.end();
+    preferences.begin("wifan", false);  
+    preferences.putString("laststate", "off");
+  }
+
+  String lastmode = preferences.getString("laststate");
+  // Close the keystore as a best practice to free up resources
+  preferences.end();
+
+  // Connect to Wi-Fi network
+  Serial.print("Connecting to ");
+  Serial.println(ssid);
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("");
+  Serial.println("WiFi connected.");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+
+  // Set up the web server to handle different routes
+  server.on("/", handleRoot);
+  server.on("/config", HTTP_POST, []() {
+    // Handle the form submission from the configuration page
+    String ssid = server.arg("ssid");
+    String password = server.arg("password");
+    String device_name = server.arg("device_name");
+    String timezone = server.arg("timezone");
+
+    // Save the new configuration to the keystore
+    preferences.begin("wifan", false);
+    preferences.putString("ssid", ssid);
+    preferences.putString("password", password);
+    preferences.putString("devicename", device_name); // Set the new device name for network identification and 
+    preferences.putString("timezone", timezone); // Set the new timezone
+    preferences.putString("laststate", "off"); // Set last state to off so the motor is defaulted off on the next boot after configuration
+    preferences.putString("setupmode", "false"); // Set setup mode to false after saving configuration
+    preferences.end();
+
+    // Apply the new timezone setting immediately
+    setTimezone(timezone);
+
+    // Redirect back to the root page after saving configuration
+    server.sendHeader("Location", "/");
+    server.send(303); // 303 See Other
+  });
+  server.on("/25/on", handleGPIO25On);
+  server.on("/25/off", handleGPIO25Off);
+  server.on("/26/on", handleGPIO26On);
+  server.on("/26/off", handleGPIO26Off);
+  server.on("/27/on", handleGPIO27On);
+  server.on("/27/off", handleGPIO27Off);
+  server.on("/all/off", handleALLOff);
+
+  // Start the web server
+  server.begin();
+  Serial.println("HTTP server started");
+
+  // Check the last fan state and restore it to ensure the fan is in the correct state after a reboot or power outage
+  if (lastmode == "low") {
+      handleGPIO25On();
+      Serial.println("Restoring last state: LOW");
+  } else if (lastmode == "medium") {
+      handleGPIO26On();
+      Serial.println("Restoring last state: MEDIUM");
+  } else if (lastmode == "high") {
+      handleGPIO27On();
+      Serial.println("Restoring last state: HIGH");
+  } else {
+      handleALLOff();
+      Serial.println("Restoring last state: OFF");
+  }
+}
+
+void loop() {
+  // Handle incoming client requests
+  server.handleClient();
+}
