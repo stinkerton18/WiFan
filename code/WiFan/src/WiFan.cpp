@@ -11,6 +11,7 @@ Preferences preferences;
 const int fan_low_output = 25;
 const int fan_medium_output = 26;
 const int fan_high_output = 27;
+const int power_cycle = 33; // This pin is used to flip the relay to cut power to the ESP32
 
 // Create a web server object
 WebServer server(80);
