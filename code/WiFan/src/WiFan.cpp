@@ -141,6 +141,7 @@ void handleRoot() {
     html += "<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}";
     html += ".buttonon { background-color: #4CAF50; border: none; color: white; padding: 16px 16px; text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer; width: 350px; height: 120px;}";
     html += ".buttonoff { background-color: #555555; border: none; color: white; padding: 16px 16px; text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer; width: 350px; height: 120px;}";
+    html += ".buttonreset { background-color: #9f3b3b; border: none; color: white; padding: 16px 16px; text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer; width: 350px; height: 120px;}";
     html += ".centered-element { position: relative; left: 50%; transform: translateX(-50%); }</style>";
     html += "<title>WiFan Whole House SmartControl</title></head>";
     html += "<body><h1>WiFan Operation</h1>";
@@ -177,6 +178,9 @@ void handleRoot() {
   html += "<tr><td align=\"left\"><b>Wi-Fi Network</b></td><td align=\"center\">" + WiFi.SSID() + "</td></tr>";
   html += "<tr><td align=\"left\"><b>IP Address</b></td><td align=\"center\">" + String(WiFi.localIP().toString()) + "</td></tr>";
   html += "</table>";
+  html += "<p></p>";
+  html += "<p></p>";
+  html += "<p><a href=\"/reset\"><button>Reset Configuration</button></a></p>";
   html += "</body></html>";
   server.send(200, "text/html", html);
 }
@@ -296,6 +300,37 @@ void handleALLOff() {
   handleRoot();
 }
 
+void handleResetConfirmation() {
+  String html = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">";
+  html += "<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}";
+  html += ".buttonreset { background-color: #9f3b3b; border: none; color: white; padding: 16px 16px; text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer; width: 350px; height: 120px;}";
+  html += ".buttonon { background-color: #4CAF50; border: none; color: white; padding: 16px 16px; text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer; width: 350px; height: 120px;}";
+  html += "</style>";
+  html += "<title>Reset WiFan Configuration</title></head>";
+  html += "<body><h1>Reset Configuration</h1>";
+  html += "<p>Are you sure you want to reset the configuration? This will erase all saved settings and require you to set up the WiFan again.</p>";
+  html += "<p><a href=\"/reset/confirm\"><button class=\"buttonreset\">Confirm Reset</button></a></p>";
+  html += "<p><a href=\"/\"><button class=\"buttonon\">Cancel</button></a></p>";
+  html += "</body></html>";
+  server.send(200, "text/html", html);
+}
+
+void handleReset() {
+  // Erase all preferences
+  preferences.begin("wifan", false);
+  preferences.clear();
+  // After clearing the preferences, we should set the default values and enable setupmode
+  preferences.putString("devicename", "WiFan");
+  preferences.putString("timezone", "PST");
+  preferences.putString("laststate", "off");
+  preferences.putString("setupmode", "true");
+  preferences.end();
+
+  // Redirect to the root page which will now show the setup page since the configuration has been reset
+  server.sendHeader("Location", "/");
+  server.send(303); // 303 See Other
+}
+
 void setup() {
   Serial.begin(115200);
   configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
@@ -404,6 +439,8 @@ void setup() {
   server.on("/27/on", handleGPIO27On);
   server.on("/27/off", handleGPIO27Off);
   server.on("/all/off", handleALLOff);
+  server.on("/reset", handleResetConfirmation);
+  server.on("/reset/confirm", handleReset);
 
   // Start the web server
   server.begin();
