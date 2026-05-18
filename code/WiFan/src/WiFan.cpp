@@ -139,9 +139,9 @@ void handleRoot() {
     // Begin setting up the web interface HTML
         html += "<link rel=\"icon\" href=\"data:,\">";
     html += "<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}";
-    html += ".buttonon { background-color: #4CAF50; border: none; color: white; padding: 16px 16px; text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer; width: 350px; height: 120px;}";
-    html += ".buttonoff { background-color: #555555; border: none; color: white; padding: 16px 16px; text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer; width: 350px; height: 120px;}";
-    html += ".buttonreset { background-color: #9f3b3b; border: none; color: white; padding: 16px 16px; text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer; width: 350px; height: 120px;}";
+    html += ".buttonon { background-color: #4CAF50; border-radius: 10px 10px 10px 10px; color: white; padding: 16px 16px; text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer; width: 350px; height: 120px;}";
+    html += ".buttonoff { background-color: #555555; border-radius: 10px 10px 10px 10px; color: white; padding: 16px 16px; text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer; width: 350px; height: 120px;}";
+    html += ".buttonreset { background-color: #9f3b3b; border-radius: 10px 10px 10px 10px; color: white; padding: 16px 16px; text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer; width: 350px; height: 120px;}";
     html += ".centered-element { position: relative; left: 50%; transform: translateX(-50%); }</style>";
     html += "<title>WiFan Whole House SmartControl</title></head>";
     html += "<body><h1>WiFan Operation</h1>";
@@ -303,8 +303,8 @@ void handleALLOff() {
 void handleResetConfirmation() {
   String html = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">";
   html += "<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}";
-  html += ".buttonreset { background-color: #9f3b3b; border: none; color: white; padding: 16px 16px; text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer; width: 350px; height: 120px;}";
-  html += ".buttonon { background-color: #4CAF50; border: none; color: white; padding: 16px 16px; text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer; width: 350px; height: 120px;}";
+  html += ".buttonreset { background-color: #9f3b3b; border-radius: 10px 10px 10px 10px; color: white; padding: 16px 16px; text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer; width: 350px; height: 120px;}";
+  html += ".buttonon { background-color: #4CAF50; border-radius: 10px 10px 10px 10px; color: white; padding: 16px 16px; text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer; width: 350px; height: 120px;}";
   html += "</style>";
   html += "<title>Reset WiFan Configuration</title></head>";
   html += "<body><h1>Reset Configuration</h1>";
