@@ -14,14 +14,9 @@ const int fan_medium_output = 26;
 const int fan_high_output = 27;
 const int power_cycle = 33; // This pin is used to flip the relay to cut power to the ESP32
 
-// Create a web server object
+// Create a DNS and web server objects
 WebServer server(80);
-
-// Configure the DNS server for captive portal functionality
 DNSServer dnsServer;
-
-// Configure the timezone for the device, this is used for logging and can be set by the user in the web interface
-const char* ntpServer = "pool.ntp.org";
 
 // Taken from suggestion by Gemini, too lazy to do the math myself, and this is easier to read and understand for users who aren't familiar with POSIX timezone strings
 void setTimezone(String zone) {
@@ -340,6 +335,7 @@ void handleAdmin() {
   html += "<body><h1>Device Administration</h1>";
   html += "<p><a href=\"/reset\"><button class=\"button\">Reset Configuration</button></a></p>";
   html += "<p><a href=\"/reboot\"><button class=\"button\">Reboot WiFan</button></a></p>";
+  html += "<p><a href=\"/powercycle\"><button class=\"button\">Power Cycle WiFan</button></a></p>";
   html += "<p><a href=\"/\"><button class=\"button\">Back to Control Page</button></a></p>";
   html += "</body></html>";
   server.send(200, "text/html", html);
@@ -379,15 +375,26 @@ void handleReset() {
 // Function to handle rebooting the device from the web interface
 void handleReboot() {
   String hostname = WiFi.getHostname();
+  // Send the page redirect to the user
   handleRedirect("http://" + hostname + ".local/");
+  // Call the reboot function to restart the device
   Reboot();
+}
+
+void handlePowerCycle() {
+  // This function is used to flip the relay to cut power to the ESP32 in order to power cycle the device
+  String hostname = WiFi.getHostname();
+  // Send the page redirect to the user
+  handleRedirect("http://" + hostname + ".local/");
+  digitalWrite(power_cycle, HIGH);
+  // There is no further action to take here. 
+  // There is a circuit to keep the relay energized for about 5 seconds
+  // That's more than enough time for the device to fully power off before power is restored.
 }
 
 void setup() {
   Serial.begin(115200);
-  configTime(gmtOffset_sec, daylightOffset_sec, ntpServer);
-
-  // Initialize the Fan output variables as outputs
+  // Initialize the Fan pin variables as outputs
   pinMode(fan_low_output, OUTPUT);
   pinMode(fan_medium_output, OUTPUT);
   pinMode(fan_high_output, OUTPUT);
@@ -441,6 +448,9 @@ void setup() {
     Serial.println("WiFi connected.");
     Serial.println("IP address: ");
     Serial.println(WiFi.localIP());
+    // Set up NTP for timekeeping
+    const char* timezone = preferences.getString("timezone").c_str();
+    configTzTime(timezone, "pool.ntp.org", "time.nist.gov", "time.google.com");
    }
     
     // Check to see if the device name has been changed from the default, and if not, set it to the default value of "WiFan"
