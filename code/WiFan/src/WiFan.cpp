@@ -22,8 +22,6 @@ DNSServer dnsServer;
 
 // Configure the timezone for the device, this is used for logging and can be set by the user in the web interface
 const char* ntpServer = "pool.ntp.org";
-const long gmtOffset_sec = -8 * 3600;
-const int daylightOffset_sec = 3600;
 
 // Taken from suggestion by Gemini, too lazy to do the math myself, and this is easier to read and understand for users who aren't familiar with POSIX timezone strings
 void setTimezone(String zone) {
@@ -381,7 +379,7 @@ void handleReset() {
 // Function to handle rebooting the device from the web interface
 void handleReboot() {
   String hostname = WiFi.getHostname();
-  handleRedirect("http://" + hostname);
+  handleRedirect("http://" + hostname + ".local/");
   Reboot();
 }
 
@@ -407,6 +405,7 @@ void setup() {
     preferences.begin("wifan", false);  
     preferences.putString("setupmode", "true");
     WiFi.setHostname("WiFan");
+    preferences.end();
   };
   String setupmode = preferences.getString("setupmode");
 
@@ -445,9 +444,7 @@ void setup() {
    }
     
     // Check to see if the device name has been changed from the default, and if not, set it to the default value of "WiFan"
-    if (preferences.isKey("devicename")) {
-      String devicename = preferences.getString("devicename");
-    } else {
+    if (!preferences.isKey("devicename")) {
       // We need to close the keystore before we can open it again to write to it 
       preferences.end();
       preferences.begin("wifan", false);  
@@ -456,10 +453,7 @@ void setup() {
     }
 
     // Check to see if the timezone has been changed from the default, and if not, set it to the default value of "PST"
-    if (preferences.isKey("timezone")) {
-      String timezone = preferences.getString("timezone");
-      setTimezone(timezone);
-    } else {
+    if (!preferences.isKey("timezone")) {
       // We need to close the keystore before we can open it again to write to it 
       preferences.end();
       preferences.begin("wifan", false);  
@@ -468,9 +462,7 @@ void setup() {
     }
 
     // Validate that the last state is set in the keystore, and if not, set it to the default value of "off"
-    if (preferences.isKey("laststate")) {
-      String laststate = preferences.getString("laststate");
-    } else {
+    if (!preferences.isKey("laststate")) {
       // We need to close the keystore before we can open it again to write to it 
       preferences.end();
       preferences.begin("wifan", false);  
@@ -488,6 +480,7 @@ void setup() {
       } else {
         server.sendHeader("Location", "http://" + WiFi.localIP().toString(), true);
       }
+      server.send(302, "text/plain", "");
     });
     
     // Set up the web server to handle different routes
