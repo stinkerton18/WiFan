@@ -37,9 +37,10 @@ void setTimezone(String zone) {
   Serial.println("Timezone updated to " + zone);
 }
 
+// Simple funciton to handle ESP32 controller reboot from the web interface
 void Reboot() {
   // Super simple, restart the ESP32 to apply any changes
-  delay(500); // Short delay to ensure any lingering responses were sent before restarting
+  delay(1000); // Short delay to ensure any lingering responses were sent before restarting
   ESP.restart();
 }
 
@@ -386,6 +387,7 @@ void handlePowerCycle() {
   String hostname = WiFi.getHostname();
   // Send the page redirect to the user
   handleRedirect("http://" + hostname + ".local/");
+  Serial.println("Power cycling the device by setting Pin 33 to HIGH...");
   digitalWrite(power_cycle, HIGH);
   // There is no further action to take here. 
   // There is a circuit to keep the relay energized for about 5 seconds
