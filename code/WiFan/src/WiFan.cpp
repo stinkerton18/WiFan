@@ -1,6 +1,8 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <Preferences.h>
+#include <vector>
+#include <set>
 #include "time.h"
 #include "DNSServer.h"
 
@@ -15,6 +17,7 @@ const int power_cycle = 33; // This pin is used to flip the relay to cut power t
 
 // Create a DNS and web server objects
 WebServer server(80);
+WebServer redirectServer(443); // Redirect server to handle HTTPS requests and redirect them to the main server
 DNSServer dnsServer;
 
 char AvailableNetworks[10][32]; // Array to hold the SSIDs of available Wi-Fi networks, with a maximum of 10 networks and SSID length of 32 characters
@@ -218,6 +221,13 @@ const char *html_part2 =
   html += "<p><a href=\"/admin\"><button>Device Administration</button></a></p>";
   html += "</body></html>";
   server.send(200, "text/html", html);
+}
+
+void handleHTTPSRedirect() {
+  // Redirect any HTTPS requests to the main server's root page
+  String url = "http://" + WiFi.localIP().toString() + "/";
+  redirectServer.sendHeader("Location", url, true);
+  redirectServer.send(301, "text/plain", "Redirecting to " + url);
 }
 
 // Function to handle turning GPIO 25 on
@@ -446,11 +456,11 @@ void setup() {
 
     // Scan for usable WiFi networks
     Serial.println("Scanning for WiFi networks...");
-    
-    //Debug code
-    Serial.printf("WiFi status before scan: %d\n", WiFi.status());
 
-    int n = WiFi.scanNetworks(true);
+    int n = WiFi.scanNetworks();
+    std::vector<String> uniqueSSIDs;
+    std::set<String> seenSSIDs;
+
     while (n == WIFI_SCAN_RUNNING) {
       delay(100);
       n = WiFi.scanComplete();
@@ -462,9 +472,19 @@ void setup() {
       Serial.println("Scan complete.");
     }
 
+    // Filter out duplicate SSIDs from the scan results
+    for (int i = 0; i < n; ++i) {
+      String currentSSID = WiFi.SSID(i);
+
+      if (seenSSIDs.find(currentSSID) == seenSSIDs.end()) {
+        uniqueSSIDs.push_back(currentSSID);
+        seenSSIDs.insert(currentSSID);
+      }
+    }
+
     // Store the SSIDs (up to 10) of the available networks in the AvailableNetworks array and print them to the serial console for debugging purposes
-    for (int i = 0; i < n && i < 10; ++i){
-      String foundssid = WiFi.SSID(i);
+    for (int i = 0; i < uniqueSSIDs.size() && i < 10; ++i){
+      String foundssid = uniqueSSIDs[i];
       foundssid.toCharArray(AvailableNetworks[i], 32);
       Serial.print("Found network: ");
       Serial.println(AvailableNetworks[i]); 
@@ -529,7 +549,12 @@ void setup() {
     // Close the keystore as a best practice to free up resources
     preferences.end();
 
-    // Set up the catch-all for both setup mode and to handle/redirect any invalid requests
+    // Setup the redirect server to handle HTTPS requests and redirect them to the main server
+    redirectServer.onNotFound(handleHTTPSRedirect);
+    redirectServer.begin();
+    Serial.println("Redirect server started to handle HTTPS requests"); 
+    
+    // Setup the catch-all for both setup mode and to handle/redirect any invalid requests
     server.onNotFound([&]() {
       if (setupmode == "true") {
         server.sendHeader("Location", "http://" + WiFi.softAPIP().toString(), true);
