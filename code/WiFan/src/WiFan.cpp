@@ -1,6 +1,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <Preferences.h>
+#include <fauxmoESP.h>
 #include "time.h"
 #include "DNSServer.h"
 #include <WiFan.h>
@@ -14,9 +15,10 @@ const int fan_medium_output = 26;
 const int fan_high_output = 27;
 const int power_cycle = 33; // This pin is used to flip the relay to cut power to the ESP32
 
-// Create a DNS and web server objects
+// Create a DNS, web server, and fauxmo objects
 WebServer server(80);
 DNSServer dnsServer;
+fauxmoESP fauxmo;
 
 // Taken from suggestion by Gemini, too lazy to do the math myself, and this is easier to read and understand for users who aren't familiar with POSIX timezone strings
 void setTimezone(String zone) {
@@ -536,6 +538,11 @@ void setup() {
     // Start the web server
     server.begin();
     Serial.println("HTTP server started");
+
+    // Set up fauxmo for Alexa integration
+    String hostname = WiFi.getHostname();
+    fauxmo.addDevice(hostname.c_str());
+    
 
     // Check the last fan state and restore it to ensure the fan is in the correct state after a reboot or power outage
     if (lastmode == "low") {
