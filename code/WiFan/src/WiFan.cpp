@@ -1,5 +1,6 @@
 #include <WiFi.h>
 #include <WebServer.h>
+#include <Matter.h>
 #include <Preferences.h>
 #include <vector>
 #include <set>
@@ -22,7 +23,6 @@ DNSServer dnsServer;
 
 char AvailableNetworks[10][32]; // Array to hold the SSIDs of available Wi-Fi networks, with a maximum of 10 networks and SSID length of 32 characters
 
-// Taken from suggestion by Gemini, too lazy to do the math myself, and this is easier to read and understand for users who aren't familiar with POSIX timezone strings
 void setTimezone(String zone) {
   String tz_string = "";
 
@@ -39,6 +39,17 @@ void setTimezone(String zone) {
   setenv("TZ", tz_string.c_str(), 1);
   tzset();
   Serial.println("Timezone updated to " + zone);
+}
+
+// Initialize the Matter service
+MatterOnOffPlugin relays[3]; // Create an array of 3 MatterOnOffPlugin objects to control the relays for the fan speeds and power cycle
+const int relayPins[3] = {25, 26, 27}; // Array to hold the GPIO pins for Matter synchronization with the relays
+bool matterStarted = false; // Flag to indicate if the Matter service has been started
+volatile bool matterSyncPending = false; // Flag to indicate if a Matter sync is pending
+
+// This function uses the actual pin state as the source of truth
+bool pinIsOn(int pin) {
+  return digitalRead(relayPins[pin]) == HIGH;
 }
 
 // Simple funciton to handle ESP32 controller reboot from the web interface
@@ -215,6 +226,12 @@ const char *html_part2 =
   html += "<tr><td align=\"left\"><b>Timezone</b></td><td align=\"center\">" + timezone + "</td></tr>";
   html += "<tr><td align=\"left\"><b>Wi-Fi Network</b></td><td align=\"center\">" + WiFi.SSID() + "</td></tr>";
   html += "<tr><td align=\"left\"><b>IP Address</b></td><td align=\"center\">" + String(WiFi.localIP().toString()) + "</td></tr>";
+  html += "<tr><td align=\"left\"><b>MAC Address</b></td><td align=\"center\">" + String(WiFi.macAddress()) + "</td></tr>";
+  if (Matter.isThreadConnected()) {
+    html += "<tr><td align=\"left\"><b>Matter Paired</b></td><td align=\"center\">Yes</td></tr>";
+  } else {
+    html += "<tr><td align=\"left\"><b>Matter Pairing Code</b></td><td align=\"center\">" + String(Matter.getManualPairingCode()) + "</td></tr>";
+  }
   html += "</table>";
   html += "<p></p>";
   html += "<p></p>";
@@ -230,119 +247,117 @@ void handleHTTPSRedirect() {
   redirectServer.send(301, "text/plain", "Redirecting to " + url);
 }
 
-// Function to handle turning GPIO 25 on
-void handleGPIO25On() {
-  // Update the last state in the keystore to "low"
-  preferences.begin("wifan", false);
-  preferences.putString("laststate", "low");
-  preferences.end();
-
+void setSpeed(int speed) {
   // Set all the GPIO pins to LOW to ensure the safety of the fan motor before turning the desired one ON
   digitalWrite(fan_low_output, LOW);
   digitalWrite(fan_medium_output, LOW);
   digitalWrite(fan_high_output, LOW);
+
   delay(200); // Short delay to ensure all the fan controls are set to LOW before turning the desired one ON
 
-  digitalWrite(fan_low_output, HIGH);
-  Serial.println("Fan set to LOW");
-  handleRoot();
+  switch (speed) {
+    case 0:
+      digitalWrite(fan_low_output, HIGH);
+      matterSyncPending = true;
+      preferences.begin("wifan", false);
+      preferences.putString("laststate", "low");
+      preferences.end();
+      Serial.println("Fan set to LOW");
+      break;
+    case 1:
+      digitalWrite(fan_medium_output, HIGH);
+      matterSyncPending = true;
+      preferences.begin("wifan", false);
+      preferences.putString("laststate", "medium");
+      preferences.end();
+      Serial.println("Fan set to MEDIUM");
+      break;
+   case 2:
+      digitalWrite(fan_high_output, HIGH);
+      matterSyncPending = true;
+      preferences.begin("wifan", false);
+      preferences.putString("laststate", "high");
+      preferences.end();
+      Serial.println("Fan set to HIGH");
+      break;
+    default:
+    preferences.begin("wifan", false);
+    preferences.putString("laststate", "off");
+    preferences.end();
+    matterSyncPending = true;
+      Serial.println("Fan set to OFF");
+  }
+} 
+
+// Function to handle turning GPIO 25 on
+void handleGPIO25On() {
+ setSpeed(0); // Set the fan speed to LOW
+handleRoot();
 }
 
 // Function to handle turning GPIO 25 off
 void handleGPIO25Off() {
-  // Update the last state in the keystore to "off"
-  preferences.begin("wifan", false);
-  preferences.putString("laststate", "off");
-  preferences.end();
-  
-  digitalWrite(fan_low_output, LOW);
-  digitalWrite(fan_medium_output, LOW);
-  digitalWrite(fan_high_output, LOW);
-  delay(200); // Short delay to ensure all the fan controls are set to LOW before turning the desired one ON
-  
+  setSpeed(-1); // Set the fan speed to OFF
   handleRoot();
 }
 
 // Function to handle turning GPIO 26 on
 void handleGPIO26On() {
-  // Update the last state in the keystore to "medium"
-  preferences.begin("wifan", false);
-  preferences.putString("laststate", "medium");
-  preferences.end();
-
-  // Set all the GPIO pins to LOW to ensure the safety of the fan motor before turning the desired one ON
-  digitalWrite(fan_low_output, LOW);
-  digitalWrite(fan_medium_output, LOW);
-  digitalWrite(fan_high_output, LOW);
-  delay(200); // Short delay to ensure the output is set to HIGH before handling the root
-  
-  digitalWrite(fan_medium_output, HIGH);
-  Serial.println("Fan set to MEDIUM");
+  setSpeed(1); // Set the fan speed to MEDIUM
   handleRoot();
 }
 
 // Function to handle turning GPIO 26 off
 void handleGPIO26Off() {
-  // Update the last state in the keystore to "off"
-  preferences.begin("wifan", false);
-  preferences.putString("laststate", "off");
-  preferences.end();
-
-  digitalWrite(fan_low_output, LOW);
-  digitalWrite(fan_medium_output, LOW);
-  digitalWrite(fan_high_output, LOW);
-  delay(200); // Short delay to ensure all the fan controls are set to LOW before turning the desired one ON
-
+  setSpeed(-1); // Set the fan speed to OFF
   handleRoot();
 }
-
+ 
 // Function to handle turning GPIO 27 on
 void handleGPIO27On() {
-  // Update the last state in the keystore to "high"
-  preferences.begin("wifan", false);
-  preferences.putString("laststate", "high");
-  preferences.end(); 
-  
-  // Set all the GPIO pins to LOW to ensure the safety of the fan motor before turning the desired one ON
-  digitalWrite(fan_low_output, LOW);
-  digitalWrite(fan_medium_output, LOW);
-  digitalWrite(fan_high_output, LOW);
-  delay(200); // Short delay to ensure all the fan controls are set to LOW before turning the desired one ON
-
-  digitalWrite(fan_high_output, HIGH);
-  Serial.println("Fan set to HIGH");
+  setSpeed(2); // Set the fan speed to HIGH
   handleRoot();
 }
 
 // Function to handle turning GPIO 27 off
 void handleGPIO27Off() {
-  // Update the last state in the keystore to "off"
-  preferences.begin("wifan", false);
-  preferences.putString("laststate", "off");
-  preferences.end();
-  
-  digitalWrite(fan_low_output, LOW);
-  digitalWrite(fan_medium_output, LOW);
-  digitalWrite(fan_high_output, LOW);
-  delay(200); // Short delay to ensure all the fan controls are set to LOW before turning the desired one ON
-
+  setSpeed(-1); // Set the fan speed to OFF
   handleRoot();
 }
 
 // Function to handle turning all GPIOs off
 void handleALLOff() {
-  // Update the last state in the keystore to "off"
-  preferences.begin("wifan", false);
-  preferences.putString("laststate", "off");
-  preferences.end();
-
-  digitalWrite(fan_low_output, LOW);
-  digitalWrite(fan_medium_output, LOW);
-  digitalWrite(fan_high_output, LOW);
-  delay(200); // Short delay to ensure all the fan controls are set to LOW before handling the root
-  Serial.println("Fan set to OFF");
-
+  setSpeed(-1); // Set the fan speed to OFF
   handleRoot();
+}
+
+//Function to handle the Matter output state changes and update the corresponding GPIO pins
+void setOutput(int relayIndex, bool state) {
+  if (pinIsOn(relayIndex) == state) return; // The pin is already in the desired state, do nothing
+
+  switch (relayIndex) {
+    case 0:
+      if (state) handleGPIO25On();
+      else handleGPIO25Off();
+      break;
+    case 1:
+      if (state) handleGPIO26On();
+      else handleGPIO26Off();
+      break;
+    case 2:
+      if (state) handleGPIO27On();
+      else handleGPIO27Off();
+      break;
+  }
+}
+
+void syncMatter() {
+  // This function synchronizes the Matter state with the actual GPIO pin states
+  for (int i = 0; i < 3; ++i) {
+    bool on = pinIsOn(i);
+    if (relays[i].getOnOff() != on) relays[i].setOnOff(on);
+  }
+  Serial.println("Matter state synchronized with Fan state.");
 }
 
 // Function to handle the device administration page
@@ -386,7 +401,11 @@ void handleReset() {
   preferences.putString("laststate", "off");
   preferences.putString("setupmode", "true");
   preferences.end();
-
+  // Decommission the Matter service to ensure it is reset and ready for re-pairing
+  for (int i = 0; i < 3; ++i) {
+    relays[i].setOnOff(false); // Ensure all Matter outputs are set to false before decommissioning
+  }
+  Matter.decommission(); 
   // Redirect to the default setup IP, will now show the setup page since the configuration has been reset
   handleRedirect("http://192.168.30.1/");
   Reboot();
@@ -423,6 +442,10 @@ void setup() {
   digitalWrite(fan_low_output, LOW);
   digitalWrite(fan_medium_output, LOW);
   digitalWrite(fan_high_output, LOW);
+
+  // Initialize the power cycle pin as an output and set it to LOW to ensure the relay is not energized at startup
+  pinMode(power_cycle, OUTPUT);
+  digitalWrite(power_cycle, LOW);
 
   // First, we need to check if we're in setup mode by checking the keystore, if the setupmode key is not set, we'll assume it's the first boot and set it to true to show the setup page
   preferences.begin("wifan", true);
@@ -505,6 +528,7 @@ void setup() {
     // Connect to Wi-Fi network
     Serial.print("Connecting to ");
     Serial.println(ssid);
+    WiFi.enableIPv6();
     WiFi.begin(ssid, password);
     while (WiFi.status() != WL_CONNECTED) {
       delay(500);
@@ -517,6 +541,16 @@ void setup() {
     // Set up NTP for timekeeping
     const char* timezone = preferences.getString("timezone").c_str();
     configTzTime(timezone, "pool.ntp.org", "time.nist.gov", "time.google.com");
+    //Initialize the Matter service for Matter over Wi-Fi/Thread functionality
+    for (int i = 0; i < 3; ++i) {
+      relays[i].begin(false); // Initialize each relay with the default state of OFF
+      relays[i].onChange([i](bool state) {
+        setOutput(i, state); // Call setOutput with the relay index and the new state when a change is detected
+        return true; // Indicate that the change was handled successfully
+      });
+    }
+    Matter.begin();
+    matterStarted = true; 
    }
     
     // Check to see if the device name has been changed from the default, and if not, set it to the default value of "WiFan"
@@ -608,21 +642,25 @@ void setup() {
 
     // Check the last fan state and restore it to ensure the fan is in the correct state after a reboot or power outage
     if (lastmode == "low") {
-        handleGPIO25On();
+        setSpeed(0); // Set the fan speed to LOW
         Serial.println("Restoring last state: LOW");
     } else if (lastmode == "medium") {
-        handleGPIO26On();
+        setSpeed(1); // Set the fan speed to MEDIUM
         Serial.println("Restoring last state: MEDIUM");
     } else if (lastmode == "high") {
-        handleGPIO27On();
+        setSpeed(2); // Set the fan speed to HIGH
         Serial.println("Restoring last state: HIGH");
     } else {
-        handleALLOff();
+        setSpeed(-1); // Set the fan speed to OFF
         Serial.println("Restoring last state: OFF");
     }
   }
 
 void loop() {
+  if (matterStarted && matterSyncPending) {
+    syncMatter(); // Synchronize the Matter state with the actual GPIO pin states
+    matterSyncPending = false; // Reset the pending flag after synchronization
+  }
   // Handle incoming client requests
   server.handleClient();
   preferences.begin("wifan", true);
