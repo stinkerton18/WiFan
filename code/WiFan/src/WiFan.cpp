@@ -227,7 +227,7 @@ const char *html_part2 =
   html += "<tr><td align=\"left\"><b>Wi-Fi Network</b></td><td align=\"center\">" + WiFi.SSID() + "</td></tr>";
   html += "<tr><td align=\"left\"><b>IP Address</b></td><td align=\"center\">" + String(WiFi.localIP().toString()) + "</td></tr>";
   html += "<tr><td align=\"left\"><b>MAC Address</b></td><td align=\"center\">" + String(WiFi.macAddress()) + "</td></tr>";
-  if (Matter.isThreadConnected()) {
+  if (Matter.isDeviceCommissioned()) {
     html += "<tr><td align=\"left\"><b>Matter Paired</b></td><td align=\"center\">Yes</td></tr>";
   } else {
     html += "<tr><td align=\"left\"><b>Matter Pairing Code</b></td><td align=\"center\">" + String(Matter.getManualPairingCode()) + "</td></tr>";
@@ -285,7 +285,7 @@ void setSpeed(int speed) {
     preferences.putString("laststate", "off");
     preferences.end();
     matterSyncPending = true;
-      Serial.println("Fan set to OFF");
+    Serial.println("Fan set to OFF");
   }
 } 
 
@@ -357,6 +357,7 @@ void syncMatter() {
     bool on = pinIsOn(i);
     if (relays[i].getOnOff() != on) relays[i].setOnOff(on);
   }
+  handleRoot(); // Refresh the web interface to reflect the updated states
   Serial.println("Matter state synchronized with Fan state.");
 }
 
@@ -401,11 +402,8 @@ void handleReset() {
   preferences.putString("laststate", "off");
   preferences.putString("setupmode", "true");
   preferences.end();
-  // Decommission the Matter service to ensure it is reset and ready for re-pairing
-  for (int i = 0; i < 3; ++i) {
-    relays[i].setOnOff(false); // Ensure all Matter outputs are set to false before decommissioning
-  }
   Matter.decommission(); 
+  delay(1000); // Short delay to ensure the decommissioning process is complete before proceeding
   // Redirect to the default setup IP, will now show the setup page since the configuration has been reset
   handleRedirect("http://192.168.30.1/");
   Reboot();
@@ -513,6 +511,8 @@ void setup() {
       Serial.println(AvailableNetworks[i]); 
     }
 
+    matterStarted = false; // Ensure Matter is not started in setup mode, as it requires a valid Wi-Fi connection to function properly
+    matterSyncPending = false; // Ensure Matter sync is not pending in setup mode, as it requires a valid Wi-Fi connection to function properly
     // Start the DNS server for captive portal functionality, redirecting all requests to the ESP32's IP address
     dnsServer.start(53, "*", IP);
     Serial.println("DNS server started for captive portal functionality");
@@ -551,6 +551,8 @@ void setup() {
     }
     Matter.begin();
     matterStarted = true; 
+    // Disable the ESP32's debug logging for the Matter service to reduce serial output clutter
+    esp_log_level_set("chip[DMG]", ESP_LOG_NONE);
    }
     
     // Check to see if the device name has been changed from the default, and if not, set it to the default value of "WiFan"
@@ -640,21 +642,23 @@ void setup() {
     server.begin();
     Serial.println("HTTP server started");
 
-    // Check the last fan state and restore it to ensure the fan is in the correct state after a reboot or power outage
-    if (lastmode == "low") {
-        setSpeed(0); // Set the fan speed to LOW
-        Serial.println("Restoring last state: LOW");
-    } else if (lastmode == "medium") {
-        setSpeed(1); // Set the fan speed to MEDIUM
-        Serial.println("Restoring last state: MEDIUM");
-    } else if (lastmode == "high") {
-        setSpeed(2); // Set the fan speed to HIGH
-        Serial.println("Restoring last state: HIGH");
-    } else {
-        setSpeed(-1); // Set the fan speed to OFF
-        Serial.println("Restoring last state: OFF");
+    if (setupmode != "true") {
+      // Check the last fan state and restore it to ensure the fan is in the correct state after a reboot or power outage
+      if (lastmode == "low") {
+          setSpeed(0); // Set the fan speed to LOW
+          Serial.println("Restoring last state: LOW");
+      } else if (lastmode == "medium") {
+          setSpeed(1); // Set the fan speed to MEDIUM
+          Serial.println("Restoring last state: MEDIUM");
+      } else if (lastmode == "high") {
+          setSpeed(2); // Set the fan speed to HIGH
+          Serial.println("Restoring last state: HIGH");
+      } else {
+          setSpeed(-1); // Set the fan speed to OFF
+          Serial.println("Restoring last state: OFF");
+      }
     }
-  }
+}
 
 void loop() {
   if (matterStarted && matterSyncPending) {
