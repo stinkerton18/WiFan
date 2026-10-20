@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta http-equiv="content-type" content="text/html; charset=utf-8"/>
+	<title></title>
+	<meta name="generator" content="LibreOffice 24.2.7.2 (Linux)"/>
+	<meta name="created" content="2026-10-19T16:59:00"/>
+	<meta name="changed" content="2026-10-19T17:53:00"/>
+	<style type="text/css">
+		@page { size: 8.27in 11.69in; margin: 0.79in }
+		p { color: #000000; line-height: 115%; orphans: 2; widows: 2; margin-bottom: 0.1in; direction: ltr; background: transparent }
+		p.western { font-family: "Liberation Serif", serif; font-size: 12pt; so-language: en-US }
+		p.cjk { font-family: "0"; font-size: 12pt; so-language: zh-CN }
+		p.ctl { font-family: "Noto Sans Devanagari"; font-size: 12pt; so-language: hi-IN }
+		h1 { color: #000000; orphans: 2; widows: 2; margin-bottom: 0.08in; direction: ltr; background: transparent; page-break-after: avoid }
+		h1.western { font-family: "Liberation Sans", sans-serif; font-size: 18pt; so-language: en-US; font-weight: bold }
+		h1.cjk { font-family: "Noto Sans CJK SC"; font-size: 18pt; so-language: zh-CN; font-weight: bold }
+		h1.ctl { font-family: "Noto Sans Devanagari"; font-size: 18pt; so-language: hi-IN; font-weight: bold }
+		td p { color: #000000; orphans: 0; widows: 0; direction: ltr; background: transparent }
+		td p.western { font-family: "Liberation Serif", serif; font-size: 12pt; so-language: en-US }
+		td p.cjk { font-family: "0"; font-size: 12pt; so-language: zh-CN }
+		td p.ctl { font-family: "Noto Sans Devanagari"; font-size: 12pt; so-language: hi-IN }
+		a:link { color: #000080; text-decoration: underline }
+	</style>
+</head>
+<body lang="en-US" text="#000000" link="#000080" vlink="#800000" dir="ltr"><p align="center" style="line-height: 100%; margin-top: 0.17in; margin-bottom: 0.08in; page-break-after: avoid">
+<font face="Liberation Sans, serif"><font size="6" style="font-size: 28pt"><b>WiFan</b></font></font></p>
+<p align="center" style="line-height: 100%; margin-top: 0.04in; margin-bottom: 0.08in; page-break-after: avoid">
+<font face="Liberation Sans, serif"><font size="5" style="font-size: 18pt">An
+ESP32 Smart Controller for 3-speed Whole House/Attic Fans</font></font></p>
+<p class="western" align="left" style="line-height: 115%"><br/>
+<br/>
+
+</p>
+<ol>
+	<li><h1 class="western" align="left">Purpose</h1></li>
+</ol>
+<p class="western" align="left" style="line-height: 115%"><font face="Liberation Serif, serif">The
+controller options for many whole house/attic fans are extremely
+poor/limited. At </font><font face="Liberation Serif, serif"><i>best</i></font><font face="Liberation Serif, serif"><span style="font-style: normal">,
+the only one I could find was limited to Bluetooth instead of a
+semi-proprietary sub-Gigahertz range RF controller. What’s worse is
+buying a second or replacement controller runs $100 or more and still
+requires you to climb up into the attic to press a pairing button to
+resync/pair the controller. Definitely not ideal given how dead
+simple these fans really are. That’s when it struck me. If I can’t
+buy a solution, then we’ll build one! </span></font>
+</p>
+<ol start="2">
+	<li><h1 class="western" align="left">Requirements 
+	</h1></li>
+</ol>
+<ul>
+	<li><p class="western" align="left" style="line-height: 115%"><font face="Liberation Serif, serif"><span style="font-style: normal">WiFi
+	– This is a </span></font><font face="Liberation Serif, serif"><span style="font-style: normal"><b>MUST</b></span></font><font face="Liberation Serif, serif"><span style="font-style: normal"><span style="font-weight: normal">.
+	No proprietary wireless controllers/frequencies/Zigbee bullshit,
+	etc.</span></span></font></p></li>
+	<li><p class="western" align="left" style="line-height: 115%"><font face="Liberation Serif, serif"><span style="font-style: normal"><span style="font-weight: normal">Webpage
+	Support – Allow for controlling/configuring directly without
+	forcing “Smart” methods (like apps, Amazon Echo/Apple
+	HomeKit/Google Home devices, etc.)</span></span></font></p></li>
+	<li><p class="western" align="left" style="line-height: 115%"><font face="Liberation Serif, serif"><span style="font-style: normal"><span style="font-weight: normal">Wireless
+	Provisioning Method – “Install, turn on, get out.” I don’t
+	want there to be any reason why you have to climb back into the
+	attic outside catastrophic failure. So all setup/configuration and
+	resetting has to be done through the web interface</span></span></font></p></li>
+	<li><p class="western" align="left" style="line-height: 115%"><font face="Liberation Serif, serif"><span style="font-style: normal"><span style="font-weight: normal">Maker
+	Friendly – Custom/bespoke PCBs are great, but having to get 5 PCBs
+	and convince 4 of your friends to buy one also for something that is
+	a “build/use just one” controller is not worth it IMHO. Thus the
+	need for designing it to be easy to buy/assemble just 1.</span></span></font></p></li>
+	<li><p class="western" align="left" style="line-height: 115%"><font face="Liberation Serif, serif"><span style="font-style: normal"><span style="font-weight: normal">Source
+	Part Model Agnostic – Where ever possible, parts/components need
+	to be generic enough that it isn’t difficult to source a
+	replacement from any manufacturer to serve the same purpose.</span></span></font></p></li>
+</ul>
+<ol start="3">
+	<li><h1 class="western" align="left">Design</h1></li>
+</ol>
+<p class="western" align="left" style="line-height: 115%"><font face="Liberation Serif, serif">The
+heart of WiFan is an ESP-32D, AKA the ESP-WROOM-32. It supports
+2.4Ghz WiFi, has 4MB of flash, is low cost and supports enough of the
+Matter library set for Smart home Integration. I’m using this one
+from Amazon: </font><a href="https://www.amazon.com/dp/B0DF2YJSHN"><font color="#000080"><font face="Liberation Serif, serif"><u>https://www.amazon.com/dp/B0DF2YJSHN</u></font></font></a></p>
+<p class="western" align="left" style="line-height: 115%"><font face="Liberation Serif, serif"><span style="font-style: normal">Along
+with this are 4 normally open 30A high power relays with low level
+triggers. The fan’s speed is controlled by connecting the incoming
+HOT/Line AC wire to the appropriate speed wire. So the relays are
+needed to to connect HOT/Line AC (when triggered) to the appropriate
+wire on the fan motor. Why 4 relays if we’re only controlling 3
+speeds? The 4</span></font><sup><font face="Liberation Serif, serif"><span style="font-style: normal">th</span></font></sup><font face="Liberation Serif, serif"><span style="font-style: normal">
+is actually wired to a simple latching circuit to kill the 5v power
+and allow a full power cycle of the ESP32 rather than just a code
+reboot.</span></font></p>
+<p class="western" align="left" style="line-height: 115%"><font face="Liberation Serif, serif"><span style="font-style: normal">In
+addition, it’ll need a 5v DC power supply, and if the relays are
+not able to be triggered with 3.3v, then a 5v/3.3v level shifter
+between the relay actuator and ESP32 GPIO lines.</span></font></p>
+<p class="western" align="left" style="line-height: 115%"><font face="Liberation Serif, serif"><span style="font-style: normal">Fortunately,
+I found a dual relay module (on Amazon) that not only fits the power
+requirements but also provides 5v DC with AC input:
+</span></font><a href="https://www.amazon.com/dp/B077W1NVLM"><font color="#000080"><font face="Liberation Serif, serif"><span style="font-style: normal"><u>https://www.amazon.com/dp/B077W1NVLM</u></span></font></font></a><font face="Liberation Serif, serif"><span style="font-style: normal">.
+Two of these modules provide us with relays we need and redundant
+power for the ESP32.</span></font></p>
+<p class="western" align="left" style="line-height: 115%"><font face="Liberation Serif, serif"><span style="font-style: normal">Since
+ESP32’s support micro-Python and Arduino C code, I used the default
+Arduino C code and the Matter library for home automation support.
+This allows for WiFan to be detected and controlled as 3 different
+“Smart Plugs” for High, Medium, and Low speeds.</span></font></p>
+<ol start="4">
+	<li><h1 class="western" align="left">Wiring Diagram</h1></li>
+</ol>
+<p class="western" align="left" style="line-height: 115%"><font face="Liberation Serif, serif">For
+the 3-speed Quiet’N’Cool fan, the following is the wire
+mapping→speed diagram</font></p>
+<table width="643" cellpadding="0" cellspacing="0">
+	<col width="321"/>
+	<col width="321"/>
+	<tr valign="top">
+		<td width="321" style="border: none; padding: 0in"><p class="western" align="center">
+			<font face="Liberation Serif, serif">Common Neutral</font></p>
+		</td>
+		<td width="321" style="border: none; padding: 0in"><p class="western" align="center">
+			<font face="Liberation Serif, serif">White Wire</font></p>
+		</td>
+	</tr>
+	<tr valign="top">
+		<td width="321" style="border: none; padding: 0in"><p class="western" align="center">
+			<font face="Liberation Serif, serif">Common Ground</font></p>
+		</td>
+		<td width="321" bgcolor="#81d41a" style="background: #81d41a; border: none; padding: 0in"><p class="western" align="center">
+			<font face="Liberation Serif, serif">Green/Bare Wire</font></p>
+		</td>
+	</tr>
+	<tr valign="top">
+		<td width="321" style="border: none; padding: 0in"><p class="western" align="center">
+			<font face="Liberation Serif, serif">Fast Speed</font></p>
+		</td>
+		<td width="321" bgcolor="#000000" style="background: #000000; border: none; padding: 0in"><p class="western" align="center">
+			<font color="#ffffff"><font face="Liberation Serif, serif">Black</font></font></p>
+		</td>
+	</tr>
+	<tr valign="top">
+		<td width="321" height="23" style="border: none; padding: 0in"><p class="western" align="center">
+			<font face="Liberation Serif, serif">Medium Speed</font></p>
+		</td>
+		<td width="321" bgcolor="#ffff00" style="background: #ffff00; border: none; padding: 0in"><p class="western" align="center">
+			<font face="Liberation Serif, serif">Yellow</font></p>
+		</td>
+	</tr>
+	<tr valign="top">
+		<td width="321" style="border: none; padding: 0in"><p class="western" align="center">
+			<font face="Liberation Serif, serif">Slow Speed</font></p>
+		</td>
+		<td width="321" bgcolor="#ff0000" style="background: #ff0000; border: none; padding: 0in"><p class="western" align="center">
+			<font color="#ffffff"><font face="Liberation Serif, serif">Red</font></font></p>
+		</td>
+	</tr>
+</table>
+<p class="western" align="left" style="line-height: 115%"><br/>
+<br/>
+
+</p>
+<p class="western" align="left" style="line-height: 115%"><font face="Liberation Serif, serif">The
+common colors, for US 110/120v AC, are as follows:</font></p>
+<table width="643" cellpadding="0" cellspacing="0">
+	<col width="321"/>
+	<col width="321"/>
+	<tr valign="top">
+		<td width="321" style="border: none; padding: 0in"><p class="western" align="center">
+			<font face="Liberation Serif, serif">Hot/Line AC</font></p>
+		</td>
+		<td width="321" bgcolor="#000000" style="background: #000000; border: none; padding: 0in"><p class="western" align="center">
+			<font color="#ffffff"><font face="Liberation Serif, serif">Black</font></font></p>
+		</td>
+	</tr>
+	<tr valign="top">
+		<td width="321" style="border: none; padding: 0in"><p class="western" align="center">
+			<font face="Liberation Serif, serif">Neutral</font></p>
+		</td>
+		<td width="321" style="border: none; padding: 0in"><p class="western" align="center">
+			<font face="Liberation Serif, serif">White</font></p>
+		</td>
+	</tr>
+	<tr valign="top">
+		<td width="321" style="border: none; padding: 0in"><p class="western" align="center">
+			<font face="Liberation Serif, serif">Ground</font></p>
+		</td>
+		<td width="321" bgcolor="#81d41a" style="background: #81d41a; border: none; padding: 0in"><p class="western" align="center">
+			<font face="Liberation Serif, serif">Green/Bare Wire</font></p>
+		</td>
+	</tr>
+</table>
+<p class="western" align="left" style="line-height: 115%"><br/>
+<br/>
+
+</p>
+<p class="western" align="left" style="line-height: 115%"><br/>
+<br/>
+
+</p>
+<p class="western" align="left" style="line-height: 115%"><br/>
+<br/>
+
+</p>
+</body>
+</html>
