@@ -337,17 +337,6 @@ void setOutput(int relayIndex, bool state) {
   setSpeed(state ? relayIndex : -1);   // 0=low, 1=medium, 2=high, -1=off
 }
 
-
-void syncMatter() {
-  // This function synchronizes the Matter state with the actual GPIO pin states
-  for (int i = 0; i < 3; ++i) {
-    bool on = pinIsOn(i);
-    if (relays[i].getOnOff() != on) relays[i].setOnOff(on);
-  }
-  handleRoot(); // Refresh the web interface to reflect the updated states
-  Serial.println("Matter state synchronized with Fan state.");
-}
-
 // Function to synchronize the Matter state with the actual GPIO/Relay states.
 void syncMatter() {
   for (int i = 0; i < 3; ++i) {
@@ -356,6 +345,8 @@ void syncMatter() {
       matterSyncPending = true;   // retry next pass
     }
   }
+  handleRoot(); // Refresh the web interface to reflect the updated states
+  Serial.println("Matter state synchronized with Fan state.");
 }
 
 // Function to handle the device administration page
