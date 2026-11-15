@@ -46,9 +46,11 @@ MatterOnOffPlugin relays[3]; // Create an array of 3 MatterOnOffPlugin objects t
 const int relayPins[3] = {25, 26, 27}; // Array to hold the GPIO pins for Matter synchronization with the relays
 bool matterStarted = false; // Flag to indicate if the Matter service has been started
 volatile bool matterSyncPending = false; // Flag to indicate if a Matter sync is pending
+volatile bool fanTransitioning = false;
 
 // Variable to track if the device is in setup mode rather than read NVS constantly
 bool inSetupMode = false;
+
 
 // This function uses the actual pin state as the source of truth
 bool pinIsOn(int pin) {
@@ -251,6 +253,8 @@ void handleHTTPSRedirect() {
 }
 
 void setSpeed(int speed) {
+  // Flag to better track Matter/state syncing
+  fanTransitioning = true;
   // Set all the GPIO pins to LOW to ensure the safety of the fan motor before turning the desired one ON
   digitalWrite(fan_low_output, LOW);
   digitalWrite(fan_medium_output, LOW);
@@ -290,6 +294,7 @@ void setSpeed(int speed) {
     matterSyncPending = true;
     Serial.println("Fan set to OFF");
   }
+  fanTransitioning = false;
 } 
 
 // Function to handle turning GPIO 25 on
@@ -342,13 +347,14 @@ void setOutput(int relayIndex, bool state) {
 
 // Function to synchronize the Matter state with the actual GPIO/Relay states.
 void syncMatter() {
+  // If the fan is currently transitioning, set the sync pending flag and return to avoid conflicts
+  if (fanTransitioning) { matterSyncPending = true; return; }  
   for (int i = 0; i < 3; ++i) {
     bool on = pinIsOn(i);
     if (relays[i].getOnOff() != on && !relays[i].setOnOff(on)) {
       matterSyncPending = true;   // retry next pass
     }
   }
-  Serial.println("Matter state synchronized with Fan state.");
 }
 
 // Function to handle the device administration page
@@ -590,12 +596,6 @@ void setup() {
       }
       server.send(302, "text/plain", "");
     });
-
-  server.onNotFound([]() {
-  String base = inSetupMode ? WiFi.softAPIP().toString() : WiFi.localIP().toString();
-  server.sendHeader("Location", "http://" + base, true);
-  server.send(302, "text/plain", "");
-});  
     
     // Set up the web server to handle different routes
     server.on("/", handleRoot);
