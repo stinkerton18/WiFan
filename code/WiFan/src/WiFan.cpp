@@ -253,7 +253,7 @@ void setSpeed(int speed) {
   digitalWrite(fan_medium_output, LOW);
   digitalWrite(fan_high_output, LOW);
 
-  delay(200); // Short delay to ensure all the fan controls are set to LOW before turning the desired one ON
+  delay(500); // Short delay to ensure all the fan controls are set to LOW before turning the desired one ON
 
   switch (speed) {
     case 0:
@@ -292,7 +292,7 @@ void setSpeed(int speed) {
 // Function to handle turning GPIO 25 on
 void handleGPIO25On() {
  setSpeed(0); // Set the fan speed to LOW
-handleRoot();
+ handleRoot();
 }
 
 // Function to handle turning GPIO 25 off
@@ -331,25 +331,12 @@ void handleALLOff() {
   handleRoot();
 }
 
-//Function to handle the Matter output state changes and update the corresponding GPIO pins
+// Function to handle setting the output of a specific relay based on the relay index and desired state
 void setOutput(int relayIndex, bool state) {
-  if (pinIsOn(relayIndex) == state) return; // The pin is already in the desired state, do nothing
-
-  switch (relayIndex) {
-    case 0:
-      if (state) handleGPIO25On();
-      else handleGPIO25Off();
-      break;
-    case 1:
-      if (state) handleGPIO26On();
-      else handleGPIO26Off();
-      break;
-    case 2:
-      if (state) handleGPIO27On();
-      else handleGPIO27Off();
-      break;
-  }
+  if (pinIsOn(relayIndex) == state) return;
+  setSpeed(state ? relayIndex : -1);   // 0=low, 1=medium, 2=high, -1=off
 }
+
 
 void syncMatter() {
   // This function synchronizes the Matter state with the actual GPIO pin states
@@ -359,6 +346,16 @@ void syncMatter() {
   }
   handleRoot(); // Refresh the web interface to reflect the updated states
   Serial.println("Matter state synchronized with Fan state.");
+}
+
+// Function to synchronize the Matter state with the actual GPIO/Relay states.
+void syncMatter() {
+  for (int i = 0; i < 3; ++i) {
+    bool on = pinIsOn(i);
+    if (relays[i].getOnOff() != on && !relays[i].setOnOff(on)) {
+      matterSyncPending = true;   // retry next pass
+    }
+  }
 }
 
 // Function to handle the device administration page
@@ -661,9 +658,11 @@ void setup() {
 }
 
 void loop() {
-  if (matterStarted && matterSyncPending) {
-    syncMatter(); // Synchronize the Matter state with the actual GPIO pin states
-    matterSyncPending = false; // Reset the pending flag after synchronization
+  static uint32_t lastSync = 0;
+  if (matterStarted && (matterSyncPending || millis() - lastSync > 500)) {
+    matterSyncPending = false;
+    lastSync = millis();
+    syncMatter();
   }
   // Handle incoming client requests
   server.handleClient();
