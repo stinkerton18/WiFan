@@ -79,6 +79,12 @@ void handleRedirect(String url) {
   server.send(200, "text/html", html);
   }
 
+// Function to handle redirecting back to "home" on the web interface
+void handleRedirectHome() {
+  server.sendHeader("Location", "/", true);
+  server.send(303, "text/plain", "");
+}
+
 // Function to handle the root URL and show the current states
 void handleRoot() {
 
@@ -191,6 +197,7 @@ const char *html_part2 =
   } else {
     // If we're not in setup mode, show the control page
     // Begin setting up the web interface HTML
+    html += "<meta http-equiv=\"refresh\" content=\"10\">"; // Refresh the page every 10 seconds to update the status
     html += "<link rel=\"icon\" href=\"data:,\">";
     html += "<style>html { font-family: Helvetica; display: inline-block; margin: 0px auto; text-align: center;}";
     html += ".buttonon { background-color: #4CAF50; border-radius: 10px 10px 10px 10px; color: white; padding: 16px 16px; text-decoration: none; font-size: 30px; margin: 2px; cursor: pointer; width: 350px; height: 120px;}";
@@ -300,43 +307,43 @@ void setSpeed(int speed) {
 // Function to handle turning GPIO 25 on
 void handleGPIO25On() {
  setSpeed(0); // Set the fan speed to LOW
- handleRoot();
+ handleRedirectHome();
 }
 
 // Function to handle turning GPIO 25 off
 void handleGPIO25Off() {
   setSpeed(-1); // Set the fan speed to OFF
-  handleRoot();
+  handleRedirectHome();
 }
 
 // Function to handle turning GPIO 26 on
 void handleGPIO26On() {
   setSpeed(1); // Set the fan speed to MEDIUM
-  handleRoot();
+  handleRedirectHome();
 }
 
 // Function to handle turning GPIO 26 off
 void handleGPIO26Off() {
   setSpeed(-1); // Set the fan speed to OFF
-  handleRoot();
+  handleRedirectHome();
 }
  
 // Function to handle turning GPIO 27 on
 void handleGPIO27On() {
   setSpeed(2); // Set the fan speed to HIGH
-  handleRoot();
+  handleRedirectHome();
 }
 
 // Function to handle turning GPIO 27 off
 void handleGPIO27Off() {
   setSpeed(-1); // Set the fan speed to OFF
-  handleRoot();
+  handleRedirectHome();
 }
 
 // Function to handle turning all GPIOs off
 void handleALLOff() {
   setSpeed(-1); // Set the fan speed to OFF
-  handleRoot();
+  handleRedirectHome();
 }
 
 // Function to handle setting the output of a specific relay based on the relay index and desired state
