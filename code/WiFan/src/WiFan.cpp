@@ -47,6 +47,9 @@ const int relayPins[3] = {25, 26, 27}; // Array to hold the GPIO pins for Matter
 bool matterStarted = false; // Flag to indicate if the Matter service has been started
 volatile bool matterSyncPending = false; // Flag to indicate if a Matter sync is pending
 
+// Variable to track if the device is in setup mode rather than read NVS constantly
+bool inSetupMode = false;
+
 // This function uses the actual pin state as the source of truth
 bool pinIsOn(int pin) {
   return digitalRead(relayPins[pin]) == HIGH;
@@ -253,7 +256,7 @@ void setSpeed(int speed) {
   digitalWrite(fan_medium_output, LOW);
   digitalWrite(fan_high_output, LOW);
 
-  delay(500); // Short delay to ensure all the fan controls are set to LOW before turning the desired one ON
+  delay(250); // Short delay to ensure all the fan controls are set to LOW before turning the desired one ON
 
   switch (speed) {
     case 0:
@@ -345,7 +348,6 @@ void syncMatter() {
       matterSyncPending = true;   // retry next pass
     }
   }
-  handleRoot(); // Refresh the web interface to reflect the updated states
   Serial.println("Matter state synchronized with Fan state.");
 }
 
@@ -447,6 +449,7 @@ void setup() {
   String setupmode = preferences.getString("setupmode");
 
   if (setupmode == "true") {
+    inSetupMode = (setupmode == "true");
     Serial.println("Device is in setup mode, showing configuration page");
     WiFi.mode(WIFI_AP_STA); // I was alerted that I should set the mode explicitly
     WiFi.disconnect(true); // Disconnect from any previously connected Wi-Fi networks to ensure a clean setup experience
@@ -579,14 +582,20 @@ void setup() {
     Serial.println("Redirect server started to handle HTTPS requests"); 
     
     // Setup the catch-all for both setup mode and to handle/redirect any invalid requests
-    server.onNotFound([&]() {
-      if (setupmode == "true") {
+    server.onNotFound([]() {
+      if (inSetupMode) {
         server.sendHeader("Location", "http://" + WiFi.softAPIP().toString(), true);
       } else {
         server.sendHeader("Location", "http://" + WiFi.localIP().toString(), true);
       }
       server.send(302, "text/plain", "");
     });
+
+  server.onNotFound([]() {
+  String base = inSetupMode ? WiFi.softAPIP().toString() : WiFi.localIP().toString();
+  server.sendHeader("Location", "http://" + base, true);
+  server.send(302, "text/plain", "");
+});  
     
     // Set up the web server to handle different routes
     server.on("/", handleRoot);
@@ -649,20 +658,16 @@ void setup() {
 }
 
 void loop() {
-  static uint32_t lastSync = 0;
-  if (matterStarted && (matterSyncPending || millis() - lastSync > 500)) {
-    matterSyncPending = false;
-    lastSync = millis();
+  // Periodically synchronize the Matter state with the actual GPIO/Relay states to ensure consistency
+  static uint32_t lastResync = 0;
+  if (matterStarted && millis() - lastResync > 5000) { lastResync = millis(); matterSyncPending = true; }
+  if (matterStarted && matterSyncPending) {
+    matterSyncPending = false;   // clear BEFORE syncing
     syncMatter();
   }
   // Handle incoming client requests
   server.handleClient();
-  preferences.begin("wifan", true);
-  String setupmode = preferences.getString("setupmode");
-  preferences.end();
 
-  // If we're in setup mode, we also need to handle DNS requests for the captive portal functionality
-  if (setupmode == "true") {
-    dnsServer.processNextRequest();
-  }
+  // If we're in setup mode, process DNS requests to handle the captive portal functionality and redirect all requests to the ESP32's IP address
+  if (inSetupMode) dnsServer.processNextRequest(); 
 }
